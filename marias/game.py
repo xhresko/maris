@@ -5,6 +5,7 @@ import cards
 import random
 import string
 
+
 class Player(object):
     """ Basic player, which plays randomly. """
 
@@ -89,19 +90,83 @@ class Player(object):
         return same_suit
 
 
+class HumanPlayer(Player):
+    """ Human player that expect input and provide info about status. """
+
+    def __init__(self, is_solo=False, cards=None):
+        self.name = "".join([random.choice(string.ascii_lowercase) for i in range(6)]).title()
+        print ("Your name will be {}".format(self.name))
+        self.is_solo = is_solo
+        if cards is None:
+            self.hand = []
+        else:
+            self.hand = cards
+
+    def print_hand(self, marked=None):
+        if not marked:
+            marked = []
+        print ("You have following cards:")
+        for i, c in enumerate(sorted(self.hand)):
+            mark = "*" if c in marked else ""
+            print("({}) - {}  {}".format(i, c, mark))
+
+    def select_talon(self, trump):
+        self.print_hand()
+        t_1 = input("Please choose first talon card: ")
+        t_2 = input("Please choose second talon card: ")
+
+        talon = [sorted(self.hand)[int(t_1)], sorted(self.hand)[int(t_2)]]
+
+        self.drop_card(talon[0])
+        self.drop_card(talon[1])
+
+        print ("You dropped {} and {} in talon.".format(talon[0], talon[1]))
+        return talon
+
+    def select_trump(self):
+        self.print_hand()
+        trump_num = input("Pick a trump by selecting card from your hand: ")
+        trump = sorted(self.hand)[int(trump_num)].suit
+        return trump
+
+    def play_card(self, table, trump):
+        playable = self.playable_cards(table, trump)
+        self.print_hand(playable)
+        card_num = input("Choose which card you want to play: ")
+        choice = sorted(self.hand)[int(card_num)]
+        self.drop_card(choice)
+        return choice
+
+
 class MariasGame(object):
     """ One game of Marias. """
 
-    def __init__(self):
+    def __init__(self, human=0, prints=False):
+
+        if not prints:
+            self.report = lambda x: None
+        else:
+            self.report = print
+
         gamepack = cards.new_pack()
 
         self.p_1 = Player(is_solo=True)
         self.p_2 = Player()
         self.p_3 = Player()
 
+
+        if human == 1:
+            self.p_1 = HumanPlayer(is_solo=True)
+        elif human == 2:
+            self.p_2 = HumanPlayer()
+        elif human == 3:
+            self.p_3 = HumanPlayer()
+
         self.p_1.add_cards(gamepack[0:7])
 
         self.trump = self.p_1.select_trump()
+
+        self.report("{} has been selected as trump".format(self.trump))
 
         self.p_2.add_cards(gamepack[7:12])
         self.p_3.add_cards(gamepack[12:17])
@@ -141,10 +206,14 @@ class MariasGame(object):
 
     def play(self):
         for i in range(10):
+            self.report("-------------")
+            self.report("Round no. {}".format(i + 1))
+            self.report("-------------")
             self.table = []
             for player in self.order:
                 card = player.play_card(self.table, self.trump)
                 self.table.append(card)
+                self.report("{} played {}".format(player.name, card))
 
             win = self.winner()
             if self.order[win].is_solo:
@@ -161,6 +230,8 @@ class MariasGame(object):
         solo_score = sum([c.score() for c in self.solo_gain]) + self.last_solo
         team_score = sum([c.score() for c in self.team_gain]) + self.last_team
 
+        self.report("Solo player score: {}".format(solo_score))
+        self.report("Team score: {}".format(team_score))
         return solo_score, team_score
 
 
@@ -169,15 +240,18 @@ def main():
     sw, tw = 0.0, 0.0
     gamnum = 1000
     for i in range(gamnum):
-        game = MariasGame()
+        game = MariasGame(human=(i % 3) + 1, prints=True)
         s, t = game.play()
+        print ("")
+        print ("==========================")
+        print ("")
         if s > t:
             sw +=1
         elif t > s:
             tw +=1
-
-    print ("Solo win percentage is", sw*100/gamnum)
-    print ("Team win percentage is", tw*100/gamnum)
+    print ("------------------------------")
+    print ("Solo win percentage is", sw*100/gamnum, "with total wins", int(sw))
+    print ("Team win percentage is", tw*100/gamnum, "with total wins", int(tw))
 
 
 if __name__ == "__main__":
