@@ -8,8 +8,9 @@ import string
 class Player(object):
     """ Basic player, which plays randomly. """
 
-    def __init__(self, cards=None):
+    def __init__(self, is_solo=False, cards=None):
         self.name = "".join([random.choice(string.ascii_lowercase) for i in range(6)]).title()
+        self.is_solo = is_solo
         if cards is None:
             self.hand = []
         else:
@@ -17,16 +18,16 @@ class Player(object):
 
     def drop_card(self, card):
         """ Use card for play or for putting into talon """
-            self.hand.remove(card)
+        self.hand.remove(card)
 
     def add_cards(self, cards):
         """ Obtain cards from the dealer """
-            self.hand += cards
+        self.hand += cards
 
-    def select_talon(self, trumps):
-        """ Won't throw away points or trumps if not necessary.
+    def select_talon(self, trump):
+        """ Won't throw away points or trump if not necessary.
         Otherwise choses cards for talon randomly."""
-        fortalon = [c for c in self.hand if c.val_game() < 6 and c.suit != trumps]
+        fortalon = [c for c in self.hand if c.val_game() < 6 and c.suit != trump]
         if len(fortalon) < 2:
             fortalon = [c for c in self.hand if c.val_game() < 6]
 
@@ -57,18 +58,20 @@ class Player(object):
     def play_card(self, table, trump):
         """ Play card from hand - by rules but randomly """
         playable = self.playable_cards(table, trump)
-        return random.choice(playable)
+        choice = random.choice(playable)
+        self.drop_card(choice)
+        return choice
 
     def playable_cards(self, table, trump):
         if not table:  # first player can choose whichever card he wants
-            return hand
+            return self.hand
         suit = table[0].suit
-        same_suit = [c for c in hand if c.suit == suit]
-        trump_suit = [c for c in hand if c.suit == trump]
+        same_suit = [c for c in self.hand if c.suit == suit]
+        trump_suit = [c for c in self.hand if c.suit == trump]
         trump_played = [c for c in table if c.suit == trump]
 
         if not same_suit and not trump_suit: # no card of same suit
-            return hand
+            return self.hand
         elif not same_suit and trump_suit:
             values = [c.val_game() for c in table if c.suit == trump]
             higher_trumps = [c for c in trump_suit if not values or c.val_game() > max(values)]
@@ -92,13 +95,13 @@ class MariasGame(object):
     def __init__(self):
         gamepack = cards.new_pack()
 
-        self.p_1 = Player()
+        self.p_1 = Player(is_solo=True)
         self.p_2 = Player()
         self.p_3 = Player()
 
         self.p_1.add_cards(gamepack[0:7])
 
-        self.trumps = self.p_1.select_trump()
+        self.trump = self.p_1.select_trump()
 
         self.p_2.add_cards(gamepack[7:12])
         self.p_3.add_cards(gamepack[12:17])
@@ -108,7 +111,7 @@ class MariasGame(object):
         self.p_3.add_cards(gamepack[27:32])
 
 
-        self.talon = self.p_1.select_talon(self.trumps)
+        self.talon = self.p_1.select_talon(self.trump)
 
         self.order = [self.p_1, self.p_2, self.p_3]
 
@@ -130,34 +133,33 @@ class MariasGame(object):
             return one > other
 
     def winner(self):
-        if not self.beats(self.table[1], self.table[0], self.trump) and not self.beats(self.table[2], self.table[0], self.trump):
+        if not self.beats(self.table[1], self.table[0]) and not self.beats(self.table[2], self.table[0]):
             return 0
-        if not self.beats(self.table[2], self.table[1], self.trump):
+        if not self.beats(self.table[2], self.table[1]):
             return 1
         return 2
 
     def play(self):
         for i in range(10):
             self.table = []
-            for (hand, name) in order:
-                pos_cards = playable_cards(hand, table, trumps)
-                card = random.choice(pos_cards)
-                table.append(card)
-                hand.remove(card)
+            for player in self.order:
+                card = player.play_card(self.table, self.trump)
+                self.table.append(card)
 
-            win = winner(table, trumps)
-            if order[win][1] == "1":
-                solo_gain += table[:]
-                last_solo, last_team = 10, 0
+            win = self.winner()
+            if self.order[win].is_solo:
+                self.solo_gain += self.table[:]
+                self.last_solo, self.last_team = 10, 0
             else:
-                team_gain += table[:]
-                last_solo, last_team = 0, 10
+                self.team_gain += self.table[:]
+                self.last_solo, self.last_team = 0, 10
             if win == 1:
-                order = order[1:] + [order[0]]
+                self.order = self.order[1:] + [self.order[0]]
             if win == 2:
-                order = [order[2]] + order[:2]
-        solo_score = sum([c.score() for c in solo_gain]) + last_solo
-        team_score = sum([c.score() for c in team_gain]) + last_team
+                self.order = [self.order[2]] + self.order[:2]
+
+        solo_score = sum([c.score() for c in self.solo_gain]) + self.last_solo
+        team_score = sum([c.score() for c in self.team_gain]) + self.last_team
 
         return solo_score, team_score
 
@@ -165,9 +167,10 @@ class MariasGame(object):
 def main():
 
     sw, tw = 0.0, 0.0
-    gamnum = 10000
+    gamnum = 1000
     for i in range(gamnum):
-        s, t = game()
+        game = MariasGame()
+        s, t = game.play()
         if s > t:
             sw +=1
         elif t > s:
